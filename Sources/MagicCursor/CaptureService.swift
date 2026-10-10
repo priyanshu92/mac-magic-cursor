@@ -10,7 +10,7 @@ enum CaptureService {
       switch self {
       case .missingDisplay: "The selected display disconnected. Select a region again."
       case .permissionDenied:
-        "Allow Magic Cursor in System Settings > Privacy & Security > Screen & System Audio Recording, then try again. You may need to quit and reopen the app."
+        "Allow Magic Cursor in System Settings > Privacy & Security > Screen & System Audio Recording, then try again. If it is missing, click + and select Magic Cursor.app. You may need to quit and reopen the app."
       }
     }
   }

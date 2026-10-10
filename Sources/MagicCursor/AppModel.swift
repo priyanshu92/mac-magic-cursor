@@ -90,7 +90,7 @@ final class AppModel: ObservableObject {
   var isUserScrolling = false
   @Published var errorMessage: String?
   @Published var modelMessage: String?
-  @Published var screenPermission = CGPreflightScreenCaptureAccess()
+  @Published var screenPermission: Bool
   @Published var question = ""
   @Published var showRecognizedText = false
   @Published var showSettings = false
@@ -153,6 +153,9 @@ final class AppModel: ObservableObject {
   private let availability: @MainActor () -> String?
   private let respond: ResponseOperation
   private let insights: InsightsOperation
+  private let screenCaptureAccess: @MainActor () -> Bool
+  private let requestScreenCaptureAccess: @MainActor () -> Bool
+  private let openURL: @MainActor (URL) -> Bool
   private let speaker = Speaker()
 
   init(
@@ -161,6 +164,11 @@ final class AppModel: ObservableObject {
     availability: @escaping @MainActor () -> String? = { AssistantEngine.availabilityMessage },
     respond: @escaping ResponseOperation = AssistantEngine.answer,
     insights: @escaping InsightsOperation = AssistantEngine.insights,
+    screenCaptureAccess: @escaping @MainActor () -> Bool = { CGPreflightScreenCaptureAccess() },
+    requestScreenCaptureAccess: @escaping @MainActor () -> Bool = {
+      CGRequestScreenCaptureAccess()
+    },
+    openURL: @escaping @MainActor (URL) -> Bool = { NSWorkspace.shared.open($0) },
     defaults: any SettingsStore = UserDefaults.standard
   ) {
     self.capture = capture
@@ -168,7 +176,11 @@ final class AppModel: ObservableObject {
     self.availability = availability
     self.respond = respond
     self.insights = insights
+    self.screenCaptureAccess = screenCaptureAccess
+    self.requestScreenCaptureAccess = requestScreenCaptureAccess
+    self.openURL = openURL
     self.defaults = defaults
+    screenPermission = screenCaptureAccess()
     modelMessage = availability()
     shakeEnabled = defaults.setting(forKey: "shakeEnabled") as? Bool ?? true
     sensitivity =
@@ -196,18 +208,44 @@ final class AppModel: ObservableObject {
 
   func refreshAvailability() {
     let previouslyGranted = screenPermission
-    screenPermission = CGPreflightScreenCaptureAccess()
+    screenPermission = screenCaptureAccess()
     if screenPermission && !previouslyGranted { errorMessage = nil }
     modelMessage = availability()
   }
 
   func requestPermission() {
-    if CGRequestScreenCaptureAccess() {
-      errorMessage = nil
+    refreshAvailability()
+    if !screenPermission {
+      let granted = requestScreenCaptureAccess()
       refreshAvailability()
+      screenPermission = screenPermission || granted
+    }
+    if screenPermission {
+      errorMessage = nil
     } else {
       errorMessage = CaptureService.CaptureError.permissionDenied.localizedDescription
-      refreshAvailability()
+      showPrivacySettings()
+    }
+  }
+
+  func openPrivacySettings() {
+    // Opening Settings alone does not register this app for Screen Recording.
+    // https://developer.apple.com/documentation/coregraphics/cgrequestscreencaptureaccess()
+    requestPermission()
+    if screenPermission { showPrivacySettings() }
+  }
+
+  private func showPrivacySettings() {
+    guard
+      let url = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+    else {
+      errorMessage = "Could not create the Screen Recording settings link."
+      return
+    }
+    if !openURL(url) {
+      errorMessage =
+        "Could not open System Settings. Open Privacy & Security > Screen & System Audio Recording manually."
     }
   }
 

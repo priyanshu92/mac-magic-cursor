@@ -35,7 +35,11 @@ Without Apple Intelligence, Magic Cursor still captures your selection and lets 
 2. Double-click the zip in Finder to extract it.
 3. Drag `Magic Cursor.app` into the Applications folder.
 4. Open the app. If macOS blocks it, click **Done**, then open **System Settings > Privacy & Security** and click **Open Anyway**.
-5. Click **Allow screen capture** and turn on Magic Cursor under **Screen & System Audio Recording**. Reopen the app if macOS asks.
+5. Click **Allow screen capture** in the assistant panel, or **Open Privacy Settings** in the app's Settings window.
+   Both buttons request Screen Recording access first and open macOS settings if access still needs approval.
+6. Turn on Magic Cursor under **Privacy & Security > Screen & System Audio Recording**.
+   If it is missing from the list, click **+** and select the copy of `Magic Cursor.app` you opened.
+   Reopen the app if macOS asks.
 
 If Gatekeeper still blocks the app, run:
 

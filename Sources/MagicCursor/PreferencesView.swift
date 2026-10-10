@@ -78,16 +78,13 @@ struct PreferencesView: View {
           HStack {
             Text(model.screenPermission ? "Allowed" : "Not allowed")
               .foregroundStyle(model.screenPermission ? .secondary : Color.orange)
-            Button("Open Privacy Settings") {
-              // System Settings deep link documented for the Screen Recording pane.
-              if let url = URL(
-                string:
-                  "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
-              {
-                NSWorkspace.shared.open(url)
-              }
-            }
+            Button("Open Privacy Settings", action: model.openPrivacySettings)
           }
+        }
+        if let message = model.errorMessage {
+          Text(message)
+            .font(.callout)
+            .foregroundStyle(Color.orange)
         }
         LabeledContent("Apple Intelligence") {
           Text(model.modelMessage == nil ? "Available" : "Unavailable")

@@ -112,6 +112,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWi
     return false
   }
 
+  func applicationDidBecomeActive(_ notification: Notification) {
+    model.refreshAvailability()
+  }
+
   private func observeMouse() {
     guard model.shakeEnabled, !model.phase.isBusy, overlayWindow == nil,
       NSEvent.pressedMouseButtons == 0, !menuTracking

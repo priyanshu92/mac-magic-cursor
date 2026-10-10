@@ -17,6 +17,11 @@ enum NativeChecks {
     }
   }
 
+  @MainActor
+  final class ScreenRecordingState {
+    var granted = false
+  }
+
   /// Each model gets its own in-memory settings, so a setting changed by one
   /// check, such as the selection mode, cannot leak into later checks, and no
   /// check ever writes to the user's Preferences folder.
@@ -89,6 +94,119 @@ enum NativeChecks {
         try await Task.sleep(for: .milliseconds(5))
       }
       check("Condition met within deadline", condition())
+    }
+
+    let screenRecordingState = ScreenRecordingState()
+    var screenRecordingRequested = false
+    var settingsOpenedAfterRequest = false
+    var permissionRequests = 0
+    var settingsLaunches = 0
+    let permissionSettings = AppModel(
+      availability: { nil },
+      screenCaptureAccess: { screenRecordingState.granted },
+      requestScreenCaptureAccess: {
+        permissionRequests += 1
+        screenRecordingRequested = true
+        return false
+      },
+      openURL: { url in
+        settingsLaunches += 1
+        settingsOpenedAfterRequest =
+          screenRecordingRequested
+          && url.absoluteString
+            == "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+        return true
+      },
+      defaults: isolatedDefaults()
+    )
+    check("Launching the model does not prompt for Screen Recording", permissionRequests == 0)
+    permissionSettings.openPrivacySettings()
+    check(
+      "Privacy Settings requests access before opening the Screen Recording page",
+      settingsOpenedAfterRequest)
+    screenRecordingRequested = false
+    settingsOpenedAfterRequest = false
+    permissionSettings.requestPermission()
+    check(
+      "Allow screen capture opens Privacy settings after access is denied",
+      settingsOpenedAfterRequest)
+    check(
+      "Denied requests open one settings page per action",
+      permissionRequests == 2 && settingsLaunches == 2)
+    check("Denied permission is not reported as granted", !permissionSettings.screenPermission)
+    check(
+      "Missing-app recovery instructions are visible after denial",
+      permissionSettings.errorMessage?.contains("click + and select Magic Cursor.app") == true)
+    screenRecordingState.granted = true
+    permissionSettings.refreshAvailability()
+    check(
+      "Returning after granting permission clears the denial",
+      permissionSettings.screenPermission && permissionSettings.errorMessage == nil)
+
+    var grantedSettingsURL: URL?
+    var grantedRequestAttempted = false
+    let alreadyGranted = AppModel(
+      availability: { nil },
+      screenCaptureAccess: { true },
+      requestScreenCaptureAccess: {
+        grantedRequestAttempted = true
+        return false
+      },
+      openURL: { url in
+        grantedSettingsURL = url
+        return true
+      },
+      defaults: isolatedDefaults()
+    )
+    alreadyGranted.openPrivacySettings()
+    check(
+      "Granted permission opens the Screen Recording page without another prompt",
+      !grantedRequestAttempted && alreadyGranted.screenPermission
+        && alreadyGranted.errorMessage == nil
+        && grantedSettingsURL?.absoluteString
+          == "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+    )
+    grantedSettingsURL = nil
+    alreadyGranted.requestPermission()
+    check(
+      "Allow does not reopen settings when permission is already granted",
+      grantedSettingsURL == nil && !grantedRequestAttempted)
+
+    var grantedRequestOpenedSettings = false
+    let grantedOnRequest = AppModel(
+      availability: { nil },
+      screenCaptureAccess: { false },
+      requestScreenCaptureAccess: { true },
+      openURL: { _ in
+        grantedRequestOpenedSettings = true
+        return true
+      },
+      defaults: isolatedDefaults()
+    )
+    grantedOnRequest.requestPermission()
+    check(
+      "A successful system permission response enables capture without a denial",
+      grantedOnRequest.screenPermission && grantedOnRequest.errorMessage == nil
+        && !grantedRequestOpenedSettings)
+
+    for accessGranted in [false, true] {
+      let failedSettings = AppModel(
+        availability: { nil },
+        screenCaptureAccess: { accessGranted },
+        requestScreenCaptureAccess: { false },
+        openURL: { _ in false },
+        defaults: isolatedDefaults()
+      )
+      failedSettings.openPrivacySettings()
+      check(
+        "Settings launch failure is surfaced with access \(accessGranted ? "granted" : "denied")",
+        failedSettings.errorMessage?.contains("Could not open System Settings") == true
+          && failedSettings.screenPermission == accessGranted)
+    }
+    if CommandLine.arguments.contains("--permissions") {
+      print("\(passed) permission checks passed; \(failed) failed.")
+      if failed > 0 { exit(1) }
+      return
     }
 
     let canvas = NSImage(size: NSSize(width: 700, height: 180))
